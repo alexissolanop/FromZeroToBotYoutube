@@ -19,7 +19,7 @@ async def main():
     http_uri = os.getenv('http_rpc_uri')
     wss_uri = os.getenv('wss_rpc_uri')
     keys_hash = os.getenv('payer_hash')
-
+    wallet_address = os.getenv('wallet_address')
     if keys_hash:
         print("Keys hash is available")
         solana_rpc_api = SolanaRpcApi(http_uri, wss_uri)
@@ -28,6 +28,9 @@ async def main():
         trades_manager = TradesManager(keys_hash, solana_rpc_api, market_manager)
 
         while True:
+            sol_balance = solana_rpc_api.get_account_balance(wallet_address)
+            sol_balance_sol = sol_balance / 1_000_000_000
+            print(f"Wallet balance (SOL): {sol_balance_sol:.4f}")
             print("\nChoose an option:")
             print("1. Buy a token")
             print("2. Sell a token")
