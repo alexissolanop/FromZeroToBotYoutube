@@ -28,9 +28,8 @@ async def main():
         trades_manager = TradesManager(keys_hash, solana_rpc_api, market_manager)
 
         while True:
-            sol_balance = solana_rpc_api.get_account_balance(wallet_address)
-            sol_balance_sol = sol_balance / 1_000_000_000
-            print(f"Wallet balance (SOL): {sol_balance_sol:.4f}")
+            sol_balance = market_manager.get_sol_balance(wallet_address)
+            print(f"Wallet balance (SOL): {sol_balance:.4f}")
             print("\nChoose an option:")
             print("1. Buy a token")
             print("2. Sell a token")

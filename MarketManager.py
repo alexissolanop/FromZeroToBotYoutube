@@ -62,5 +62,9 @@ class MarketManager(AbstractMarketManager):
     def _handle_token_update(self, arg1: str):
         new_price = self.get_price(arg1)
         self.candlesticks[arg1].update(datetime.now(), new_price)
-        new_price_string = f"{new_price:.20f}"
-        print(arg1 + " was updated! Price: " + new_price_string)
+        #new_price_string = f"{new_price:.20f}"
+        #print(arg1 + " was updated! Price: " + new_price_string)
+
+    def get_sol_balance(self, wallet_address):
+        sol_balance = self.solana_rpc_api.get_account_balance(wallet_address)  
+        return sol_balance / 1_000_000_000
