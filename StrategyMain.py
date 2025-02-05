@@ -1,6 +1,6 @@
 from MarketManager import MarketManager
 from SolanaRpcApi import SolanaRpcApi
-from TradesManager import TradesManager
+from TradesManagerBackup import TradesManager
 from TradingDTOs import *
 import os
 import asyncio

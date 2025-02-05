@@ -1,5 +1,6 @@
 import TokensApi as TokensApi
 import base64
+import time
 from TradingDTOs import *
 from TransactionChecker import TransactionChecker
 from AbstractTradingStrategy import *
@@ -65,39 +66,55 @@ class TradesManager(OrderExecutor):
     
     def _swap(self, in_token_address: str, out_token_address: str, amount: Amount, slippage: Amount, priority_fee: Amount, confirm_transaction):
         ret_val = None
-        swap_transaction = TokensApi.get_swap_transaction(self.signer_pubkey, in_token_address, out_token_address, amount.ToScaledValue(), slippage.ToScaledValue(), priority_fee.ToScaledValue())
+        swap_transaction = TokensApi.get_swap_transaction(
+            self.signer_pubkey,
+            in_token_address,
+            out_token_address,
+            amount.ToScaledValue(),
+            slippage.ToScaledValue(),
+            priority_fee.ToScaledValue()
+        )
 
         if swap_transaction:
             raw_bytes = base64.b64decode(swap_transaction)
             raw_tx = VersionedTransaction.from_bytes(raw_bytes)
 
-            signed_transaction = VersionedTransaction(raw_tx.message, [self.signer_wallet])
+        signed_transaction = VersionedTransaction(raw_tx.message, [self.signer_wallet])
+        if signed_transaction:
+            transaction_checker: TransactionChecker = None
+            try:
+                tx_signature = str(signed_transaction.signatures[0])
+                # Immediately print the transaction signature.
+                print(f"Transaction signature: {tx_signature}")
 
-            if signed_transaction:
-                transaction_checker :TransactionChecker = None
-                try: 
-                    tx_signature = str(signed_transaction.signatures[0])
+                if confirm_transaction:
+                    transaction_checker = TransactionChecker(self.solana_api_rpc, tx_signature, timeout=35)
+                    transaction_checker.start()
+                else:
+                    ret_val = tx_signature
 
-                    if confirm_transaction:
-                        transaction_checker = TransactionChecker(self.solana_api_rpc, tx_signature, timeout=35)
-                        transaction_checker.start()
-                    else:
-                        ret_val = tx_signature
-                    
-                    for i in range(c_default_swap_retries):
-                        print("Try #" + str(i+1))
+                # Dynamically update the same line for each retry attempt.
+                for i in range(c_default_swap_retries):
+                    print(f"\rSending transaction attempt #{i+1}", end="")
+                    self.solana_api_rpc.send_transaction(signed_transaction)
+                print()  # To break the dynamic line after retries.
+                
+            except Exception as e:
+                # wait for 2 seconds, and then continue.
+                print(f"\nChecking transaction...", end="", flush=True)
+                time.sleep(2)
+                print(" done.")
 
-                        self.solana_api_rpc.send_transaction(signed_transaction)                                                                
-                except Exception as e:                    
-                    print(tx_signature + " transaction failed to process: " + str(e))
-               
-                if transaction_checker:
-                    #Wait for transaction checker to complete or timeout
-                    transaction_checker.join()
-                    if transaction_checker.did_succeed():
-                        ret_val = tx_signature
+            if transaction_checker:
+                # Wait for the transaction checker to complete.
+                transaction_checker.join()
+                if transaction_checker.did_succeed():
+                    ret_val = tx_signature
+                else:
+                    print(f"Transaction {tx_signature} failed confirmation check.")
 
         return ret_val
+
     
     def _update_account_balance(self, contract_address: str):
         if contract_address == self.signer_pubkey:

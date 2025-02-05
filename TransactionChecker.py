@@ -46,7 +46,7 @@ class TransactionChecker(threading.Thread):
                     response = await asyncio.wait_for(websocket.recv(), timeout=self.timeout)
 
                     if response:
-                        print("Received a response!" + str(response))
+                        #print("Received a response!" + str(response))
                         self.final_response = json.loads(response)
                 except TimeoutError as e:
                     print("TransactionChecker Timed out!")
