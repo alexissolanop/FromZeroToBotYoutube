@@ -1,13 +1,22 @@
+from utility import get_time_greeting, get_random_quote
 from MarketManager import MarketManager
 from SolanaRpcApi import SolanaRpcApi
 from TradesManager import TradesManager
+from SolanaUSDPrice import get_sol_price
 from TradingDTOs import *
 import os
 import sys
 from dotenv import load_dotenv
 import asyncio
+from colorama import init, Fore, Style
+import random
+from datetime import datetime
+
+# Initialize colorama
+init(autoreset=True)
 
 load_dotenv()
+
 
 sol_buy_amount = Amount.sol_ui(.0001)
 slippage = Amount.percent_ui(13)
@@ -16,23 +25,54 @@ profit_limit = PnlOption(trigger_at_percent = Amount.percent_ui(600), allocation
 stop_loss = PnlOption(trigger_at_percent = Amount.percent_ui(-15), allocation_percent = Amount.percent_ui(100))
 
 async def main():
-    print("Starting main function")
+    # Colorful startup banner
+    print(Fore.CYAN + "=" * 50)
+    print(Fore.YELLOW + "🚀 SOLANA TRADING BOT INITIALIZING 🚀".center(50))
+    print(Fore.CYAN + "=" * 50)
+    
+    print(Fore.GREEN + "Starting main function")
     http_uri = os.getenv('http_rpc_uri')
     wss_uri = os.getenv('wss_rpc_uri')
     keys_hash = os.getenv('payer_hash')
     wallet_address = os.getenv('wallet_address')
     if keys_hash:
-        print("Keys hash is available")
+        print(Fore.MAGENTA + "✓ Keys hash is available")
         solana_rpc_api = SolanaRpcApi(http_uri, wss_uri, http_uri, wallet_address)
-        print("Connected to Solana RPC")
+        print(Fore.BLUE + "✓ Connected to Solana RPC")
+        
+        # Separator
+        print(Fore.CYAN + "=" * 50)
+        
+        # Dynamic greeting
+        print(Fore.GREEN + f"{get_time_greeting()}, Mr Mason!")
+        
+        # Random quote of the day
+        print(Fore.MAGENTA + f"Quote of the Day: {get_random_quote()}")
+        
         market_manager = MarketManager(solana_rpc_api)
         trades_manager = TradesManager(keys_hash, solana_rpc_api, market_manager)
 
         try:
             while True:
+                # Get SOL price
+                sol_price = get_sol_price()
+                
                 # Get Wallet SOL balance
                 sol_balance = market_manager.get_sol_balance(wallet_address)
-                print(f"Wallet balance (SOL): {sol_balance:.4f}")
+
+                # Print SOL price if available
+                if sol_price is not None:
+                    print(f"Current SOL/USD Price: ${sol_price:.2f}")
+                else:
+                    print("Current SOL/USD Price: Unable to fetch")
+                
+                # Print SOL balance with USD value if price is available
+                if sol_price is not None:
+                    print(f"Wallet balance (SOL): {sol_balance:.4f} (${sol_balance * sol_price:.2f})")
+                else:
+                    print(f"Wallet balance (SOL): {sol_balance:.4f} (USD price unavailable)")
+                
+                
 
                 # Get non-zero token accounts
                 token_accounts = solana_rpc_api.get_non_zero_token_accounts()
