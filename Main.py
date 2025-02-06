@@ -1,4 +1,4 @@
-from utility import get_time_greeting, get_random_quote
+from utility import get_time_greeting, get_random_quote,colorize_sol,get_fear_greed_index,colorize_greed_index
 from MarketManager import MarketManager
 from SolanaRpcApi import SolanaRpcApi
 from TradesManager import TradesManager
@@ -40,6 +40,10 @@ async def main():
         solana_rpc_api = SolanaRpcApi(http_uri, wss_uri, http_uri, wallet_address)
         print(Fore.BLUE + "✓ Connected to Solana RPC")
         
+        # ✅ Initialize MarketManager BEFORE using it
+        market_manager = MarketManager(solana_rpc_api)
+        trades_manager = TradesManager(keys_hash, solana_rpc_api, market_manager)
+
         # Separator
         print(Fore.CYAN + "=" * 50)
         
@@ -48,31 +52,41 @@ async def main():
         
         # Random quote of the day
         print(Fore.MAGENTA + f"Quote of the Day: {get_random_quote()}")
-        
-        market_manager = MarketManager(solana_rpc_api)
-        trades_manager = TradesManager(keys_hash, solana_rpc_api, market_manager)
+
+         # Get SOL price
+        sol_price = get_sol_price()
+                
+        # Get Wallet SOL balance
+        sol_balance = market_manager.get_sol_balance(wallet_address)
+
+        # Fetch Fear and Greed Index
+        colorized_index, classification = get_fear_greed_index()
+
+        # Print SOL price if available
+        if sol_price is not None:
+            print(f"💰 SOL Price Spotlight 💸: ${sol_price:.2f} 🚀")
+        else:
+            print("💔 SOL Price: Unable to fetch 🕵️")
+
+        # Print result only if data is available
+        if colorized_index is not None:
+            print(f"📊 Market Mood Meter: {colorized_index} ({classification})")
+        else:
+            print("🚫 Market Mood: Mysterious Signal Lost 🛸")
+
+        # Separator
+        print(Fore.CYAN + "=" * 50)
 
         try:
-            while True:
-                # Get SOL price
-                sol_price = get_sol_price()
-                
-                # Get Wallet SOL balance
-                sol_balance = market_manager.get_sol_balance(wallet_address)
-
-                # Print SOL price if available
-                if sol_price is not None:
-                    print(f"Current SOL/USD Price: ${sol_price:.2f}")
-                else:
-                    print("Current SOL/USD Price: Unable to fetch")
+            while True: 
                 
                 # Print SOL balance with USD value if price is available
                 if sol_price is not None:
-                    print(f"Wallet balance (SOL): {sol_balance:.4f} (${sol_balance * sol_price:.2f})")
+                    colored_balance = colorize_sol(sol_balance)
+                    print(f"💰 Wallet Balance Spotlight 🌟: {colored_balance} (${sol_balance * sol_price:.2f}) 🚀")
                 else:
-                    print(f"Wallet balance (SOL): {sol_balance:.4f} (USD price unavailable)")
-                
-                
+                    colored_balance = colorize_sol(sol_balance)
+                    print(f"💰 Wallet Balance Spotlight 🌟: {colored_balance} (USD price unavailable) 🕵️")
 
                 # Get non-zero token accounts
                 token_accounts = solana_rpc_api.get_non_zero_token_accounts()
@@ -80,8 +94,8 @@ async def main():
                     for token, amount in token_accounts.items():
                         print(f"Holding {amount} of {token}")
                 else:
-                    print("Your wallet might be empty now, but every epic journey begins with an empty canvas—get ready to paint your masterpiece!")
-                
+                    print("🌱 Your wallet might be empty now, but every epic journey begins with an empty canvas—get ready to paint your masterpiece! 🎨✨")
+
                 print("\nChoose an option:")
                 print("1. Buy a token")
                 print("2. Sell a token")
@@ -207,3 +221,6 @@ if __name__ == "__main__":
     finally:
         # Forcefully terminate the program
         os._exit(0)
+
+
+
