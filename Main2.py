@@ -1,6 +1,6 @@
 from MarketManager import MarketManager
 from SolanaRpcApi import SolanaRpcApi
-from TradesManagerBackup import TradesManager
+from TradesManager import TradesManager
 from TradingDTOs import *
 import os
 import asyncio
@@ -14,15 +14,31 @@ priority_fee = Amount.sol_ui(.0004)
 profit_limit = PnlOption(trigger_at_percent = Amount.percent_ui(600), allocation_percent = Amount.percent_ui(100))
 stop_loss = PnlOption(trigger_at_percent = Amount.percent_ui(-80), allocation_percent = Amount.percent_ui(100))
 
+
 async def main():
     http_uri = os.getenv('http_rpc_uri')
     wss_uri = os.getenv('wss_rpc_uri')
     keys_hash = os.getenv('payer_hash')
+    wallet_address = os.getenv('wallet_address')
 
     if keys_hash:
-        solana_rpc_api = SolanaRpcApi(http_uri, wss_uri)
+        solana_rpc_api = SolanaRpcApi(http_uri, wss_uri, http_uri, wallet_address)
         market_manager = MarketManager(solana_rpc_api)
         trades_manager = TradesManager(keys_hash, solana_rpc_api, market_manager)
+
+        token_accounts = solana_rpc_api.get_non_zero_token_accounts() 
+                
+        print("token_accounts:", token_accounts)
+
+        # Get non-zero token accounts
+        token_accounts = solana_rpc_api.get_non_zero_token_accounts()
+        if token_accounts:
+            for token_account in token_accounts:
+                mint = token_account["mint"]
+                balance = token_account["balance"]
+                print(f"Holding {balance} of {mint}")
+        else:
+            print("🌱 Your wallet might be empty now, but every epic journey begins with an empty canvas—get ready to paint your masterpiece! 🎨✨")
 
         while True:
             token_address = input("Enter a token address to trade: ")

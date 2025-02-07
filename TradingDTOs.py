@@ -1,6 +1,11 @@
 from enum import Enum
 from abc import abstractmethod
 from Candlesticks import Candlestick
+from enum import Enum
+
+
+
+
 
 class StrategyState(Enum):
     PENDING = 0,
@@ -22,7 +27,7 @@ class Order_Type(Enum):
     SIMPLE_BUY_DIP_STRATEGY = 3,
     OTHER_STRATEGY = 4
 
-class Amount_Units:
+class Amount_Units(Enum):
     SOL = 0
     USD = 1
     TOKENS = 2
@@ -69,6 +74,16 @@ class Amount:
     def percent_ui(amount: float):
         return Amount(Value_Type.UI, Amount_Units.PERCENT, amount, 100)
 
+
+    # Add this so it prints a human-friendly version
+    def __str__(self):
+        try:
+            amount_unit_str = Amount_Units(self.amount_units).name  # Convert int to Enum name
+        except ValueError:
+            amount_unit_str = str(self.amount_units)  # If conversion fails, just print the number
+
+        return f"{self.ToUiValue()} {amount_unit_str}"
+    
 class TriggerPrice:
     def __init__(self, in_sell_amount: Amount, target_price: Amount):
         self.in_sell_amount = in_sell_amount

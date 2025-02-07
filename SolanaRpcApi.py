@@ -85,7 +85,7 @@ class SolanaRpcApi:
                     })
         return token_accounts
 
-    def get_associated_token_account_address(owner_address: str, mint_address: str)->str:
+    def get_associated_token_account_address(self,owner_address: str, mint_address: str)->str:
         mint_address_pk = Pubkey.from_string(mint_address)        
         owner_address_pk = Pubkey.from_string(owner_address)
 

@@ -141,7 +141,7 @@ class TradesManager(OrderExecutor):
                 if new_balance:
                     print(f"New Balance={new_balance}")
                     token_account_info.balance.set_amount(new_balance)
-
+                
     def get_order_transaction(self, tx_signature)-> SwapTransactionInfo:
         return self.market_manager.get_swap_info(tx_signature, self.signer_pubkey, 30)
 
