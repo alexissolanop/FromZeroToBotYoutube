@@ -1,5 +1,6 @@
 import random
 import os
+import platform
 import requests
 from dotenv import load_dotenv
 from datetime import datetime
@@ -99,3 +100,4 @@ def get_fear_greed_index():
     except requests.exceptions.RequestException as e:
         print(f"Error fetching Fear and Greed Index: {e}")
         return None, None
+

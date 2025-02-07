@@ -1,70 +1,32 @@
 from utility import get_time_greeting, get_random_quote,colorize_sol,get_fear_greed_index,colorize_greed_index
+from config.config import sol_buy_amount, slippage, priority_fee, profit_limit, stop_loss
+from config.setup import http_uri, wss_uri, keys_hash, wallet_address
+from utils.ui import clear_terminal, print_startup_banner, print_dashboard_header, print_quote_of_the_day, print_fear_greed_index,print_initial_sol_price,print_wallet_balance,should_clear_terminal,print_separator
+from utils.wallet import update_and_print_token_holdings
+from utils.market import update_sol_price, update_fear_greed_index
+from SolanaUSDPrice import get_sol_price
 from MarketManager import MarketManager
 from SolanaRpcApi import SolanaRpcApi
 from TradesManager import TradesManager
-from SolanaUSDPrice import get_sol_price
 from TradingDTOs import *
 import os
 import sys
-from dotenv import load_dotenv
 import asyncio
 from colorama import init, Fore, Style
 import random
 from datetime import datetime
 import time
-import copy 
 
-
-# Initialize colorama
-init(autoreset=True)
-
-load_dotenv()
-
-# Trading Configuration
-sol_buy_amount = Amount.sol_ui(.0001)
-slippage = Amount.percent_ui(13)
-priority_fee = Amount.sol_ui(.0001)
-profit_limit = PnlOption(trigger_at_percent = Amount.percent_ui(600), allocation_percent = Amount.percent_ui(100))
-stop_loss = PnlOption(trigger_at_percent = Amount.percent_ui(-15), allocation_percent = Amount.percent_ui(100))
-
-def clear_terminal():
-    """Clears the terminal output across platforms"""
-    if platform.system().lower() == 'windows':
-        os.system('cls')
-    else:
-        os.system('clear')
+clear_terminal()
 
 async def main():
     # Colorful startup banner
-    print(Fore.CYAN + "=" * 50)
-    print(Fore.YELLOW + "🚀 SOLANA TRADING BOT INITIALIZING 🚀".center(50))
-    print(Fore.CYAN + "=" * 50)
+    print_startup_banner()
     
-    print(Fore.GREEN + "Starting main function")
-
-    # Refresh intervals
-    PRICE_REFRESH_INTERVAL = 300  # 5 minutes
-    FEAR_GREED_REFRESH_INTERVAL = 1800  # 30 minutes
-
-
-    
-    # Last update timestamps
-    last_price_update = time.time()
-    last_fear_greed_update = 0
-
-
-    # Previous values for detecting changes
-    previous_sol_price = None
-    previous_fear_greed = None
-    previous_token_accounts_dict = None
-    colorized_index = None
-    classification = None
-    sol_price = None
-    # Load environment variables
-    http_uri = os.getenv('http_rpc_uri')
-    wss_uri = os.getenv('wss_rpc_uri')
-    keys_hash = os.getenv('payer_hash')
-    wallet_address = os.getenv('wallet_address')
+    # Import config variables
+    from config.config import PRICE_REFRESH_INTERVAL, FEAR_GREED_REFRESH_INTERVAL, last_price_update, \
+        last_fear_greed_update, previous_sol_price, previous_fear_greed, previous_token_accounts_dict, \
+        colorized_index, classification, sol_price
 
     if keys_hash:
         print(Fore.MAGENTA + "✓ Keys hash is available")
@@ -77,13 +39,14 @@ async def main():
 
         # Print initial welcome messages
         # Separator
-        print(Fore.CYAN + "=" * 50)
+        print_separator()
         
         # Dynamic greeting
-        print(Fore.GREEN + f"{get_time_greeting()}, Mr Mason!")
+        print(Fore.GREEN + f"{get_time_greeting()}, MrMason!")
         
         # Random quote of the day
-        print(Fore.MAGENTA + f"Quote of the Day: {get_random_quote()}")
+        quote = get_random_quote()
+        print_quote_of_the_day(quote)
 
         # Fetch initial data
         sol_price = get_sol_price()
@@ -95,95 +58,39 @@ async def main():
         previous_fear_greed = colorized_index
         #previous_token_accounts = solana_rpc_api.get_non_zero_token_accounts()
 
-        # Print initial values
-        print(f"💰 Initial SOL Price: ${sol_price:.2f} 🚀" if sol_price else "💔 SOL Price: Unable to fetch 🕵️")
-        print(f"📊 Initial Market Mood: {colorized_index} ({classification})" if colorized_index else "🚫 Market Mood: Mysterious Signal Lost 🛸")
+        # Print initial values SOL price
+        print_initial_sol_price(sol_price)
+        # Fetch Fear & Greed Index
+        colorized_index, classification = get_fear_greed_index()
+        print_fear_greed_index(colorized_index, classification)
 
         # Separator
-        print(Fore.CYAN + "=" * 50)
+        print_separator()
 
         # Initialize your "previous" variable as a dictionary
         previous_token_accounts_dict = None
         
         try:
             while True: 
-                # Get current time               
-                current_time = time.time()
-
                 # ✅ Refresh SOL price every 5 minutes
-                if current_time - last_price_update > PRICE_REFRESH_INTERVAL:
-                    try:
-                        new_sol_price = get_sol_price()
-                        if new_sol_price != previous_sol_price:
-                            previous_sol_price = new_sol_price
-                            sol_price = new_sol_price
-                            print(f"Updated SOL price: {sol_price}")
-                    except Exception as e:
-                        print(f"Error refreshing SOL price: {e}")
-                    last_price_update = current_time
-
-                
+                sol_price, last_price_update = update_sol_price(sol_price, previous_sol_price, last_price_update, PRICE_REFRESH_INTERVAL)
 
                 # ✅ Refresh Fear & Greed Index every 30 minutes
-                if current_time - last_fear_greed_update > FEAR_GREED_REFRESH_INTERVAL:
-                    try:
-                        new_index, new_classification = get_fear_greed_index()
-                        if new_index != previous_fear_greed:
-                            previous_fear_greed = new_index
-                            colorized_index, classification = new_index, new_classification
-                            print(f"Updated Fear & Greed: {colorized_index} - {classification}")
-                    except Exception as e:
-                        print(f"Error updating fear/greed: {e}")    
-                    last_fear_greed_update = current_time 
-
-                
+                colorized_index, classification, last_fear_greed_update = update_fear_greed_index(previous_fear_greed, last_fear_greed_update, FEAR_GREED_REFRESH_INTERVAL)
+ 
                 # ✅ Always refresh wallet balance & tokens inside the loop
                 sol_balance = market_manager.get_sol_balance(wallet_address)
                 token_accounts = solana_rpc_api.get_non_zero_token_accounts() 
-                
 
                 # Print dashboard
-                print(Fore.YELLOW + "🚀 SOLANA TRADING BOT DASHBOARD 🚀".center(50))
-                print(Fore.CYAN + "=" * 50)                
-                colored_balance = colorize_sol(sol_balance)
-                print(f"💰 Wallet Balance: {colored_balance} (${sol_balance * sol_price:.2f})" if sol_price else f"💰 Wallet Balance: {colored_balance} (USD price unavailable)")
-                
-                if token_accounts:
-                    # If first time OR any changes compared to previous
-                    if previous_token_accounts_dict is None or token_accounts != previous_token_accounts_dict:
-                        print("🔹 Token Holdings:")
-
-                        # Loop the list
-                        for token_info in token_accounts:
-                        # Each token_info is a dict with keys 'mint' and 'balance'
-                            mint = token_info['mint']
-                            balance = token_info['balance']
-                            print(f"Holding {balance} of {mint}")
-
-                        # Update previous_token_accounts_dict to match what we have now
-                        previous_token_accounts_dict = copy.deepcopy(token_accounts)
-   
-                    else:
-                        # No changes in token holdings
-                        print("🛑 No token balance changes detected.")
-                else:
-                    # No token_accounts at all
-                    if previous_token_accounts_dict is None or previous_token_accounts_dict != {}:
-                        # This is the first time we've seen an empty dict or it's changed from non-empty
-                        print("🌱 Your wallet might be empty now, but every epic journey begins with an empty canvas—get ready to paint your masterpiece! 🎨✨")
-                        previous_token_accounts_dict = {}
-                    else:
-                        # It's still empty (no changes)
-                        print("🛑 No token balance changes detected.")
-
-                
+                print_dashboard_header()
+                # Print SOL balance             
+                print_wallet_balance(sol_balance, sol_price)
+                # Print Token Holdings
+                previous_token_accounts_dict = update_and_print_token_holdings(token_accounts, previous_token_accounts_dict)
 
                 # ✅ Clear terminal only when data changes (Prevents flickering)
-                if (
-                    sol_price != previous_sol_price or
-                    colorized_index != previous_fear_greed or
-                    (previous_token_accounts_dict is not None and [tuple(sorted(d.items())) for d in token_accounts] != [tuple(sorted(d.items())) for d in previous_token_accounts_dict])
-                ):
+                if should_clear_terminal(sol_price, previous_sol_price, colorized_index, previous_fear_greed, token_accounts, previous_token_accounts_dict):
                     clear_terminal()
                 
                 print("\nChoose an option:")
