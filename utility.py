@@ -74,13 +74,16 @@ def colorize_greed_index(index_value):
     reset = "\033[0m"  # Reset color
     return f"{color}{index_value}{reset}"
 
+
+
 def get_fear_greed_index():
+
     """
     Fetches the latest Fear and Greed Index value from CoinMarketCap API.
     Returns:
         tuple: (index_value, classification) or (None, None) if API fails.
     """
-    url = "https://pro-api.coinmarketcap.com/v3/fear-and-greed/historical"
+    url = "https://pro-api.coinmarketcap.com/v3/fear-and-greed/latest"
     headers = {
         "X-CMC_PRO_API_KEY": COINMARKETCAP_API_KEY
     }
@@ -90,10 +93,9 @@ def get_fear_greed_index():
         response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
         data = response.json()
 
-        if "data" in data and data["data"]:
-            latest_entry = data["data"][0]
-            index_value = latest_entry["value"]
-            classification = latest_entry["value_classification"]
+        if "data" in data and isinstance(data["data"], dict):
+            index_value = data["data"]["value"]
+            classification = data["data"]["value_classification"]
             return colorize_greed_index(index_value), classification
         else:
             return None, None
@@ -101,3 +103,47 @@ def get_fear_greed_index():
         print(f"Error fetching Fear and Greed Index: {e}")
         return None, None
 
+def get_fear_greed_index_alternative():
+    """
+    Fetches the latest Fear and Greed Index value from Alternative.me API.
+    Returns:
+        tuple: (colorized_index, classification) or (None, None) if API fails.
+    """
+    url = "https://api.alternative.me/fng/"
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
+        data = response.json()
+
+        if "data" in data and data["data"]:
+            latest_entry = data["data"][0]
+            index_value = int(latest_entry["value"])
+            classification = latest_entry["value_classification"]
+            return colorize_greed_index(index_value), classification
+        else:
+            return None, None
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Fear and Greed Index: {e}")
+        return None, None
+    
+def get_bitcoin_dominance():
+    url = "https://pro-api.coinmarketcap.com/v1/global-metrics/quotes/latest"
+    headers = {
+        "X-CMC_PRO_API_KEY": COINMARKETCAP_API_KEY  # Replace with your actual API key
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
+        data = response.json()
+
+        if "data" in data and "btc_dominance" in data["data"]:
+            btc_dominance = data["data"]["btc_dominance"]
+            return btc_dominance
+        else:
+            print("Bitcoin dominance data not found in the response.")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Bitcoin dominance: {e}")
+        return None

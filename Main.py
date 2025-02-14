@@ -1,9 +1,10 @@
-from utility import get_time_greeting, get_random_quote,colorize_sol,get_fear_greed_index,colorize_greed_index
+from utility import get_time_greeting, get_random_quote,get_fear_greed_index,get_bitcoin_dominance
 from config.config import sol_buy_amount, slippage, priority_fee, profit_limit, stop_loss
 from config.setup import http_uri, wss_uri, keys_hash, wallet_address
 from utils.ui import clear_terminal, print_startup_banner, print_dashboard_header, print_quote_of_the_day, print_fear_greed_index,print_initial_sol_price,print_wallet_balance,should_clear_terminal,print_separator
 from utils.wallet import update_and_print_token_holdings
 from utils.market import update_sol_price, update_fear_greed_index
+from utils.trading import buy_token, sell_token
 from SolanaUSDPrice import get_sol_price
 from MarketManager import MarketManager
 from SolanaRpcApi import SolanaRpcApi
@@ -52,7 +53,7 @@ async def main():
         sol_price = get_sol_price()
         sol_balance = market_manager.get_sol_balance(wallet_address)
         colorized_index, classification = get_fear_greed_index()
-        
+     
         # Set initial previous values
         previous_sol_price = sol_price
         previous_fear_greed = colorized_index
@@ -63,6 +64,10 @@ async def main():
         # Fetch Fear & Greed Index
         colorized_index, classification = get_fear_greed_index()
         print_fear_greed_index(colorized_index, classification)
+
+        #Print Bitcon Dominance
+        btc_dominance = get_bitcoin_dominance()
+        print(f"₿ Bitcoin Dominance: {btc_dominance:.2f}% 🔥")
 
         # Separator
         print_separator()
@@ -81,7 +86,7 @@ async def main():
                 # ✅ Always refresh wallet balance & tokens inside the loop
                 sol_balance = market_manager.get_sol_balance(wallet_address)
                 token_accounts = solana_rpc_api.get_non_zero_token_accounts() 
-
+                
                 # Print dashboard
                 print_dashboard_header()
                 # Print SOL balance             
@@ -112,51 +117,18 @@ async def main():
                     except (KeyboardInterrupt, EOFError):
                         print("\nReturning to main menu...")
                         continue
-                    order = Order(Order_Type.BUY, token_address, sol_buy_amount, slippage, priority_fee)
-                    tx_signature = trades_manager.execute_order(order, True)
-                    print(f"Buy order executed. Transaction signature: {tx_signature}")
-
-                    # Wait for 2 seconds to allow on-chain state to update
-                    await asyncio.sleep(2)
-
-                    # Fetch token details
-                    token_info = market_manager.get_token_info(token_address)
-                    transaction_info = trades_manager.get_order_transaction(tx_signature)
-
-                    # Check if transaction info is valid and tokens were bought
-                    if transaction_info and transaction_info.token_diff > 0:
-                        # Calculate price per token
-                        temp_calc = abs(transaction_info.sol_diff / transaction_info.token_diff)
-                        base_token_price = Amount.sol_ui(temp_calc / 1E9)  # Convert from lamports to SOL
-                        # Calculate the amount of tokens bought
-                        tokens_bought = Amount.tokens_ui(transaction_info.token_diff, token_info.decimals_scale_factor)
-                        
-                        print(f"Tokens Bought: {tokens_bought.ToUiValue()} {token_address}")
-                        print(f"Purchase Price: {base_token_price.ToUiValue()} SOL per token")
-                    else:
-                        print("Transaction info not found or no tokens were bought.")
-
+                    # Call the new buy function
+                    await buy_token(trades_manager, market_manager, token_address, sol_buy_amount, slippage, priority_fee)
+                    
                 elif choice == '2':
                     try:
                         token_address = input("Enter a token address to sell: ")
                     except (KeyboardInterrupt, EOFError):
                         print("\nReturning to main menu...")
                         continue
-                    token_info = market_manager.get_token_info(token_address)
-                    wallet_balance = trades_manager.get_account_balance(token_address)
                     
-                    print(f"Current wallet balance for {token_address}: {wallet_balance}")
-
-                    try:
-                        percentage_to_sell = float(input("Enter the percentage of tokens to sell (0-100): "))
-                    except (KeyboardInterrupt, EOFError):
-                        print("\nReturning to main menu...")
-                        continue
-                    tokens_to_sell = wallet_balance.value * (percentage_to_sell / 100)
-
-                    order = Order(Order_Type.SELL, token_address, Amount.tokens_ui(tokens_to_sell, token_info.decimals_scale_factor), slippage, priority_fee)
-                    tx_signature = trades_manager.execute_order(order, True)
-                    print(f"Sell order executed for {tokens_to_sell} tokens. Transaction signature: {tx_signature}")
+                    await sell_token(trades_manager, market_manager, token_address, slippage, priority_fee)
+            
 
                 elif choice == '3':
                     try:

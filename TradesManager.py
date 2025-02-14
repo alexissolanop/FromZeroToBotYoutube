@@ -1,6 +1,7 @@
 import TokensApi as TokensApi
 import base64
 import time
+import config.config as config
 from TradingDTOs import *
 from TransactionChecker import TransactionChecker
 from AbstractTradingStrategy import *
@@ -12,6 +13,8 @@ from solders.keypair import Keypair
 from solders.transaction import VersionedTransaction
 
 c_default_swap_retries = 5
+
+
 
 class TradesManager(OrderExecutor):
     def __init__(self, keys_hash: str, solana_rpc_api: SolanaRpcApi, market_manager: MarketManager):
@@ -27,35 +30,104 @@ class TradesManager(OrderExecutor):
         
         self._update_account_balance(self.signer_pubkey)
 
-    def execute_order(self, order: Order, retry_until_successful = False)->str:
+    def execute_order(self, order: Order, retry_until_successful=False) -> str:
         tx_signature = None
         token_info = self.market_manager.get_token_info(order.token_address)
 
-        if token_info:
-            if order.order_type == Order_Type.BUY or order.order_type == Order_Type.SELL:
-                if order.order_type == Order_Type.BUY:
-                    in_token_address = token_info.sol_address
-                    out_token_address = order.token_address
-                elif order.order_type == Order_Type.SELL:
-                    in_token_address = order.token_address
-                    out_token_address = token_info.sol_address
+        # If we can't find token info, just stop.
+        if not token_info:
+            print("No token info found, exiting execute_order.")
+            return None
 
-                should_try = True
+        # Decide in/out token addresses based on buy or sell
+        if order.order_type == Order_Type.BUY:
+            in_token_address = token_info.sol_address
+            out_token_address = order.token_address
+        elif order.order_type == Order_Type.SELL:
+            in_token_address = order.token_address
+            out_token_address = token_info.sol_address
+        else:
+            # If it's a strategy order, handle that
+            self.market_manager.monitor_token(order.token_address)
+            trade_strategy = self.create_strategy(
+                token_info=token_info,
+                order_executor=self,
+                order=order
+            )
+            trade_strategy.start()
+            self.active_trades[self.active_trade_count] = trade_strategy
+            self.active_trade_count += 1
+            return None
 
-                while should_try:
-                    tx_signature = self._swap(in_token_address, out_token_address, order.amount, order.slippage, order.priority_fee, order.confirm_transaction)
+        # Start the retry loop
+        should_try = True
+        
+        # Initial priority fee: either from the order, or from config
+        current_priority_fee = order.priority_fee or Amount.sol_ui(config.PRIORITY_FEE_DEFAULT_SOL)
 
-                    if tx_signature or not retry_until_successful:
-                         should_try = False
+        # Track how many times we've retried
+        current_retry_count = 0
+
+        # Pull in config values
+        max_fee_retries = config.MAX_FEE_RETRIES
+        fee_increment = config.PRIORITY_FEE_INCREMENT_SOL
+        max_fee_cap = config.PRIORITY_FEE_MAX_SOL
+
+        while should_try:
+            # Log the priority fee for debugging
+            print(f"Attempting transaction with priority fee: {current_priority_fee.ToUiValue()} SOL")
+
+            # Attempt the swap
+            tx_signature = self._swap(
+                in_token_address,
+                out_token_address,
+                order.amount,
+                order.slippage,
+                current_priority_fee,
+                order.confirm_transaction
+            )
+
+            if tx_signature:
+                # Success: break out of the loop
+                should_try = False
             else:
-                self.market_manager.monitor_token(order.token_address)
-                trade_strategy = self.create_strategy(token_info=token_info, order_executor=self, order=order)
-                trade_strategy.start()
-                
-                self.active_trades[self.active_trade_count] = trade_strategy
-                self.active_trade_count += 1
+                # No signature returned
+                if not retry_until_successful:
+                    # If the user didn't ask for repeated retries, give up after one attempt
+                    should_try = False
+                else:
+                    # If we do want to keep retrying...
+                    if current_retry_count < max_fee_retries:
+                        # Check if we've hit the max fee cap
+                        if current_priority_fee.ToUiValue() >= max_fee_cap:
+                            print(f"Priority fee exceeded {max_fee_cap} SOL. Stopping attempts.")
+                            should_try = False
+                        else:
+                            # Increment the fee and retry
+                            current_retry_count += 1
+                            print(
+                                f"Transaction failed. Increasing priority fee by {fee_increment} SOL "
+                                f"(retry #{current_retry_count}/{max_fee_retries})..."
+                            )
+                            new_fee_value = current_priority_fee.ToUiValue() + fee_increment
+
+                            # Make sure we do not exceed the hard cap in next iteration
+                            if new_fee_value > max_fee_cap:
+                                new_fee_value = max_fee_cap
+
+                            current_priority_fee = Amount.sol_ui(new_fee_value)
+                    else:
+                        print(f"Max fee retries ({max_fee_retries}) reached. Stopping attempts.")
+                        should_try = False
+
+        # Outside the loop, check whether we succeeded or not
+        if tx_signature:
+            print(f"Transaction succeeded with priority fee = {current_priority_fee.ToUiValue()} SOL")
+        else:
+            print("Transaction did not succeed after all attempts.")
 
         return tx_signature
+
     
     @staticmethod
     def create_strategy(token_info: TokenInfo, order_executor: OrderExecutor, order: Order)->AbstractTradingStrategy:
@@ -78,6 +150,7 @@ class TradesManager(OrderExecutor):
         if swap_transaction:
             raw_bytes = base64.b64decode(swap_transaction)
             raw_tx = VersionedTransaction.from_bytes(raw_bytes)
+            
 
         signed_transaction = VersionedTransaction(raw_tx.message, [self.signer_wallet])
         if signed_transaction:
@@ -139,7 +212,7 @@ class TradesManager(OrderExecutor):
                 new_balance = self.solana_api_rpc.get_token_account_balance(token_account_info.token_account_address)
 
                 if new_balance:
-                    print(f"New Balance={new_balance}")
+                    #print(f"New Balance={new_balance}")
                     token_account_info.balance.set_amount(new_balance)
                 
     def get_order_transaction(self, tx_signature)-> SwapTransactionInfo:

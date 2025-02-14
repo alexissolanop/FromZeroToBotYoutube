@@ -5,8 +5,12 @@ import time
 sol_buy_amount = Amount.sol_ui(.0001)
 slippage = Amount.percent_ui(13)
 priority_fee = Amount.sol_ui(.0001)
+PRIORITY_FEE_INCREMENT_SOL = 0.0001
+MAX_FEE_RETRIES = 5
+PRIORITY_FEE_MAX_SOL = 0.005
 profit_limit = PnlOption(trigger_at_percent = Amount.percent_ui(600), allocation_percent = Amount.percent_ui(100))
 stop_loss = PnlOption(trigger_at_percent = Amount.percent_ui(-15), allocation_percent = Amount.percent_ui(100))
+
 
 
 
